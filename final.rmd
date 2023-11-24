@@ -1,0 +1,114 @@
+---
+output:
+  word_document: default
+  html_document: default
+---
+```{r setup,  eval=FALSE}
+knitr::opts_chunk$set(echo = TRUE, warning = FALSE, message = FALSE)
+library(caret)
+library(doParallel)
+registerDoParallel(cores = detectCores() - 1) 
+
+my_data <- read.csv("data/raceData.csv", header = TRUE, stringsAsFactors = TRUE)
+
+set.seed(1337)
+
+index <- createDataPartition(my_data$Finish.Position, p = .6, list = FALSE)
+
+training_data <- my_data[index, ]
+validation_data <- my_data[-index, ]
+
+all_levels <- union(levels(training_data$Genotype), levels(validation_data$Genotype))
+training_data$Genotype <- factor(training_data$Genotype, levels = all_levels)
+validation_data$Genotype <- factor(validation_data$Genotype, levels = all_levels)
+
+# 
+# # This should be fixing this error 
+# # > predictions <- predict(model_lm, newdata = validation_data)
+# # Error in model.frame.default(Terms, newdata, na.action = na.action, xlev = object$xlevels) : 
+# #   factor Genotype has new levels Z111, Z128, Z148, Z153, Z195
+
+
+# Model 1
+
+model_lm <- lm(Finish.Position ~ ., data = training_data)
+
+print(model_lm)
+
+predictions <- predict(model_lm, newdata = validation_data)
+
+actual <- validation_data$Finish.Position
+test_r_squared <- cor(actual, predictions)^2
+rmse_test <- sqrt(mean((predictions - actual)^2))
+cat("Test Set R-squared:", test_r_squared, "\n")
+cat("Test Set RMSE:", rmse_test, "\n")
+
+residuals <- validation_data$Finish.Position - predictions
+
+results <- data.frame(
+  Actual = validation_data$Finish.Position,
+  Predicted = predictions,
+  Residual = residuals
+)
+
+correct_threshold <- 1
+
+results$Correctly_Predicted <- abs(results$Residual) <= correct_threshold
+
+library(ggplot2)
+ggplot(results, aes(x = Actual, y = Predicted)) +
+  geom_point() +
+  geom_abline(intercept = 0, slope = 1, color = "red") +
+  labs(title = "Actual vs. Predicted Finish Positions", x = "Actual Finish Position", y = "Predicted Finish Position") +
+  xlim(0, 12) + ylim(0, 12)  # Set the x and y-axis limits to 0-12
+
+# Model 2 
+
+train_control <- trainControl(method = "cv", number = 10, verboseIter = TRUE)
+
+stepped_model <- step(model_lm, direction="both", trace=FALSE)
+
+system.time({
+  model_lm_step <- train(stepped_model, data=training_data, method="lm", trControl=train_control)
+})
+
+stopImplicitCluster()
+
+print(model_lm_step)
+
+predictions_stepped <- predict(stepped_model, newdata = validation_data)
+actual_stepped <- validation_data$Finish.Position
+test_r_squared_stepped <- cor(actual_stepped, predictions_stepped)^2
+rmse_test_stepped <- sqrt(mean((predictions_stepped - actual)^2))
+cat("Test Set R-squared:", test_r_squared_stepped, "\n")
+cat("Test Set RMSE:", rmse_test_stepped, "\n")
+
+residuals <- validation_data$Finish.Position - predictions_stepped
+
+results_stepped <- data.frame(
+  Actual = validation_data$Finish.Position,
+  Predicted = predictions,
+  Residual = residuals
+)
+
+results_stepped$Correctly_Predicted <- abs(results_stepped$Residual) <= correct_threshold
+
+ggplot(results_stepped, aes(x = Actual, y = Predicted)) +
+  geom_point() +
+  geom_abline(intercept = 0, slope = 1, color = "red") +
+  labs(title = "Actual vs. Predicted Finish Positions", x = "Actual Finish Position", y = "Predicted Finish Position") +
+  xlim(0, 12) + ylim(0, 12)  # Set the x and y-axis limits to 0-12
+
+
+# Cross Validation 
+
+model_lm_cv <- train(Finish.Position ~ ., data = training_data, method = "lm", trControl = train_control)
+
+
+predictions <- predict(model_lm_cv, newdata = validation_data)
+
+actual <- validation_data$Finish.Position
+test_r_squared <- cor(actual, predictions)^2
+rmse_test <- sqrt(mean((predictions - actual)^2))
+cat("Test Set R-squared:", test_r_squared, "\n")
+cat("Test Set RMSE:", rmse_test, "\n")
