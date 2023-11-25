@@ -1,21 +1,22 @@
-```{r setup, include=FALSE}
 knitr::opts_chunk$set(echo = TRUE, warning = FALSE, message = FALSE)
 library(caret)
 library(doParallel)
 registerDoParallel(cores = detectCores() - 1) 
 
 my_data <- read.csv("data/raceData.csv", header = TRUE, stringsAsFactors = TRUE)
+my_data <- my_data[, !names(my_data) %in% c("Genotype")]
 
 set.seed(1337)
 
 index <- createDataPartition(my_data$Finish.Position, p = .6, list = FALSE)
 
+
 training_data <- my_data[index, ]
 validation_data <- my_data[-index, ]
 
-all_levels <- union(levels(training_data$Genotype), levels(validation_data$Genotype))
-training_data$Genotype <- factor(training_data$Genotype, levels = all_levels)
-validation_data$Genotype <- factor(validation_data$Genotype, levels = all_levels)
+# all_levels <- union(levels(training_data$Genotype), levels(validation_data$Genotype))
+# training_data$Genotype <- factor(training_data$Genotype, levels = all_levels)
+# validation_data$Genotype <- factor(validation_data$Genotype, levels = all_levels)
 
 # 
 # # This should be fixing this error 
